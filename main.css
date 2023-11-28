@@ -1,0 +1,96 @@
+html {
+	/* Solarized theme */
+	--base03:  #002b36;
+	--base02:  #073642;
+	--base01:  #586e75;
+	--base00:  #657b83;
+	--base0:   #839496;
+	--base1:   #93a1a1;
+	--base2:   #eee8d5;
+	--base3:   #fdf6e3;
+	--yellow:  #b58900;
+	--orange:  #cb4b16;
+	--red:     #dc322f;
+	--magenta: #d33682;
+	--violet:  #6c71c4;
+	--blue:    #268bd2;
+	--cyan:    #2aa198;
+	--green:   #859900;
+
+	background: var(--base3);
+
+	color: var(--base00);
+	font-family: monospace;
+	font-size: 12px;
+
+	height: 100%;
+	overflow-y: auto;
+
+	cursor: text;
+	user-select: none;
+	touch-action: none;
+}
+
+body {
+	height: 100%;
+	margin: 0;
+	padding-top: 1px;
+	padding-bottom: 2rem;
+	padding-left:  .3rem;
+	padding-right: .3rem;
+	word-break: break-word;
+}
+
+#debug {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 50vw;
+	height: 100%;
+}
+
+span.nested {
+	border: 1px solid var(--base00);
+	border-radius: 4px;
+}
+
+span.symbol {
+	background-color: var(--base00);
+	color: var(--base3);
+	border-radius: 4px;
+}
+
+span.selected {
+	background-color: var(--base02);
+	color: var(--base0);
+}
+
+span.whitespace {
+	color: #93A1A1;
+}
+
+[data-caret='before']::before,
+[data-caret='after']::after,
+body.empty::before {
+	content: 'I';
+}
+[data-caret]::before,
+[data-caret]::after,
+body.empty::before {
+	display: inline-block;
+	width: 0;
+	height: 1lh;
+	outline: 1px solid black;
+	outline-offset: -1px;
+	color: transparent;
+	pointer-events: none;
+}
+body:not(.pause-caret-blink) [data-caret]::before,
+body:not(.pause-caret-blink) [data-caret]::after,
+body:not(.pause-caret-blink).empty::before {
+	animation: .5s caret-blink infinite alternate steps(2, jump-none);
+}
+@keyframes caret-blink {
+	from { opacity: 1; }
+	to   { opacity: 0; }
+}
