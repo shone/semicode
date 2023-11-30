@@ -54,9 +54,16 @@ span.nested {
 	border-radius: 4px;
 }
 
-span.symbol {
-	background-color: var(--base00);
-	color: var(--base3);
+span.bytes {
+	display: inline-block;
+	border-radius: 4px;
+	color: white;
+	padding-left:  .3rem;
+	padding-right: .3rem;
+}
+
+span.label {
+	border: 1px solid var(--base00);
 	border-radius: 4px;
 }
 

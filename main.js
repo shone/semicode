@@ -1,20 +1,24 @@
 const LINK = '\uEEEE';
-const LABEL = Symbol('LABEL');
+const EMBED = '\uEEEF';
+const EMBED_BYTES = '\uEEEA';
+const LABEL = '\uE001';
 const whitespaceChars = new Set([' ', '\n', '\t', LINK]);
 
 const blocks = [];
 let caretPosition = 0;
 let selectPosition = 0;
 
+const symbolToBytesMap = new Map();
+
 fetch('semicode.txt').then(async response => {
 	const text = await response.text();
-	insertAtCaret([...text]);
+	insertAtCaret(clipboardStringToBlocks(text));
 });
 
 const keyActionMap = {
-	AltArrowRight:       () => insertAtCaret([LINK]),
-	'Alt\'':             () => insertAtCaret([LABEL]),
-	'Shift ':            () => insertAtCaret([Symbol()]),
+	CtrlSpace:           () => insertAtCaret([makeUuidSymbol()]),
+	ShiftSpace:          () => insertAtCaret([LINK]),
+	CtrlSingleQuote:     () => insertAtCaret([LABEL]),
 	ArrowRight:          () => moveCaret(caretPosition+1),
 	ArrowLeft:           () => moveCaret(caretPosition-1),
 	CtrlArrowRight:      () => moveCaretWord(true),
@@ -44,15 +48,36 @@ const keyActionMap = {
 	Escape:              () => deselect(),
 }
 
-const blockToLabelMap = new Map();
-blockToLabelMap.set(LABEL, 'LABEL');
+function makeUuidSymbol() {
+	const symbol = Symbol();
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	symbolToBytesMap.set(symbol, bytes);
+	return symbol;
+}
+
+function byteToHexString(byte) {
+	return ('0' + (byte & 0xFF).toString(16)).slice(-2);
+}
+function hexStringToBytes(string) {
+	const byteCount = string.length / 2;
+	const bytes = new Uint8Array(byteCount);
+	for (let i=0; i<byteCount; i++) {
+		bytes[i] = parseInt(string.substr(i*2, 2), 16);
+	}
+	return bytes;
+}
+
+function toHexString(byteArray) {
+	return Array.from(byteArray, byteToHexString).join('');
+}
 
 function getBlockDisplayText(block) {
 	if (typeof block === 'string') {
 		return block;
 	}
-	if (typeof block === 'symbol') {
-		return blockToLabelMap.get(block) || '(symbol)';
+	if (block instanceof Uint8Array) {
+		return toHexString(block);
 	}
 	return '(unknown)';
 }
@@ -70,40 +95,48 @@ updateLabels();
 
 function getTriples() {
 	let i=0;
-	function getNode() {
-		let node = blocks[i];
-		while (node === '\n') {
-			node = blocks[++i];
+	function getWord() {
+		if (blocks[i] === LINK) {
+			i++;
+			return LINK;
 		}
-		if (typeof node === 'string') {
-			while (typeof blocks[i+1] === 'string') {
-				node += blocks[i+1];
-				i++;
-			}
+		// Skip whitespace
+		while (i < blocks.length && whitespaceChars.has(blocks[i])) {
+			i++;
+		}
+		if (i === blocks.length) {
+			return null;
+		}
+		let word = blocks[i];
+		while (typeof word === 'string' && word !== LINK && i < blocks.length && !whitespaceChars.has(blocks[i+1]) && typeof blocks[i+1] === 'string') {
+			word += blocks[++i];
 		}
 		i++;
-		return node;
+		return word;
 	}
 	function getTriple() {
 		let tripleIndex = 0;
 		const triple = [null, null, null];
 		while (i<blocks.length) {
-			const node = getNode();
-			if (node === LINK && triple[tripleIndex] !== null) {
+			const word = getWord();
+			if (word === null) {
+				break;
+			}
+			if (word === LINK && triple[tripleIndex] !== null) {
 				tripleIndex++;
 			} else {
-				triple[tripleIndex] = node;
+				triple[tripleIndex] = word;
 				if (tripleIndex === 2) {
-					break;
+					return triple;
 				}
 			}
 		}
-		return triple;
+		return null;
 	}
 	const triples = [];
 	while (i<blocks.length) {
 		const triple = getTriple();
-		if (triple.some(node => node === null)) {
+		if (triple === null) {
 			break;
 		}
 		triples.push(triple);
@@ -113,19 +146,20 @@ function getTriples() {
 
 function updateLabels() {
 	const triples = getTriples();
+	const blockToLabelMap = new Map();
 	for (const triple of triples) {
-		if (triple[1] === LABEL && (typeof triple[2] === 'string')) {
+		if (typeof triple[0] === 'symbol' && triple[1] === LABEL && (typeof triple[2] === 'string')) {
 			blockToLabelMap.set(triple[0], triple[2]);
 		}
 	}
 	for (const span of spans) {
 		const block = spanToBlockMap.get(span);
-		if (typeof block === 'symbol' && block !== LINK && block !== LABEL) {
+		if (typeof block === 'symbol') {
 			const label = blockToLabelMap.get(block);
 			if (label) {
 				span.textContent = label;
 			} else {
-				span.textContent = '(symbol)';
+				span.innerHTML = '&nbsp;&nbsp;';
 			}
 		}
 	}
@@ -137,30 +171,50 @@ function updateSelectionDisplay() {
 	spans.forEach((span, index) => span.classList.toggle('selected', index >= indexMin && index < indexMax));
 }
 
+const randomByteArrayColors = [
+	'#b58900', // yellow
+	'#cb4b16', // orange
+	'#dc322f', // red
+	'#d33682', // magenta
+	'#6c71c4', // violet
+	'#268bd2', // blue
+	'#2aa198', // cyan
+	'#859900', // green
+]
+
 function makeSpanForBlock(block) {
 	const span = document.createElement('span');
-	switch (block) {
-		case '\n': span.innerHTML = '<br>';   break;
-		case '\t': span.textContent = '» ';   break;
-		case LINK: span.textContent = '➤';   break;
-		case ' ':  span.innerHTML = '&nbsp;'; break;
-		default:
-			if (typeof block === 'string') {
-				span.textContent = block;
-			} else if (typeof block === 'symbol') {
-				span.textContent = '(symbol)';
-			} else if (Array.isArray(block)) {
-				span.append(...block.map(makeSpanForBlock));
-				span.classList.add('nested');
-			}
-	}
-	if (block === '\t') {
+	if (block === '\n') {
+		span.innerHTML = '<br>';
+	} else if (block === ' ') {
+		span.innerHTML = '&nbsp;';
+	} else if (block === '\t') {
+		span.textContent = '» ';
 		span.classList.add('whitespace');
+	} else if (block === LINK) {
+		span.textContent = '➤';
+	} else if (block === LABEL) {
+		span.textContent = '"';
+		span.classList.add('label');
+	} else if (typeof block === 'string') {
+		span.textContent = block;
+	} else if (typeof block === 'symbol') {
+		const bytes = symbolToBytesMap.get(block);
+		if (bytes.length <= 2) {
+			span.textContent = toHexString(bytes);
+		} else {
+			crypto.subtle.digest('sha-256', bytes).then(hash => {
+				const hashBytes = new Uint8Array(hash);
+				span.style.background = randomByteArrayColors[hashBytes[0]%randomByteArrayColors.length];
+			});
+			span.innerHTML = '&nbsp;&nbsp;';
+		}
+		span.classList.add('bytes');
+	} else if (Array.isArray(block)) {
+		span.append(...block.map(makeSpanForBlock));
+		span.classList.add('nested');
 	}
 	spanToBlockMap.set(span, block);
-	if (typeof block === 'symbol' && block !== LINK) {
-		span.classList.add('symbol');
-	}
 	return span;
 }
 
@@ -188,6 +242,7 @@ function insertAtCaret(blocks_) {
 	}
 	caretPosition = spliceStart + blocks_.length;
 	selectPosition = caretPosition;
+	updateLabels();
 }
 
 let caretBlinkTimeout = null;
@@ -443,19 +498,92 @@ function selectWordAtPosition(position) {
 	spans.forEach((span, index) => span.classList.toggle('selected', index >= selectionStart && index < selectionEnd));
 }
 
+function blocksToClipboardString(blocks_) {
+	return blocks_.flatMap(block => {
+		if (typeof block === 'string') {
+			return block;
+		}
+		if (Array.isArray(block)) {
+			return `${EMBED}${block.length}:${blocksToClipboardString(block)}`;
+		}
+		if (typeof block === 'symbol') {
+			const bytes = symbolToBytesMap.get(block);
+			return `${EMBED_BYTES}${bytes.length}:${[...bytes].map(byteToHexString).join('')}`;
+		}
+	}).join('');
+}
+
+function compareArrayBuffers(a, b) {
+	if (a.byteLength !== b.byteLength) {
+		return false;
+	}
+	const uint32A = new Uint32Array(a);
+	const uint32B = new Uint32Array(b);
+	for (let i=0; i<uint32A.length; i++) {
+		if (uint32A[i] !== uint32B[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function clipboardStringToBlocks(string) {
+	const blocks_ = [];
+	for (let i=0; i<string.length; i++) {
+		if (string[i] === EMBED) {
+			i++;
+			const embedLengthIndex = i;
+			while (string[i] !== ':') {
+				i++;
+			}
+			const embedLength = parseInt(string.slice(embedLengthIndex, i));
+			const embeddedString = string.slice(i+1, i+1+embedLength);
+			blocks_.push(clipboardStringToBlocks(embeddedString));
+			i += embedLength;
+		} else if (string[i] === EMBED_BYTES) {
+			i++;
+			const embedLengthIndex = i;
+			while (string[i] !== ':') {
+				i++;
+			}
+			const embedLength = parseInt(string.slice(embedLengthIndex, i)) * 2;
+			const embeddedString = string.slice(i+1, i+1+embedLength);
+			const bytes = hexStringToBytes(embeddedString);
+			let symbol = null;
+			const symbolFindResult = [...symbolToBytesMap.entries()].find(([symbol, b]) => compareArrayBuffers(b, bytes));
+			if (symbolFindResult) {
+				symbol = symbolFindResult[0];
+			} else {
+				symbol = Symbol();
+				symbolToBytesMap.set(symbol, bytes);
+			}
+			blocks_.push(symbol);
+			i += embedLength;
+		} else {
+			blocks_.push(string[i]);
+		}
+	}
+	return blocks_;
+}
+
 function copy() {
 	const startIndex = Math.min(caretPosition, selectPosition);
 	const endIndex = Math.max(caretPosition, selectPosition);
-	navigator.clipboard.writeText(blocks.slice(startIndex, endIndex).join(''));
+	const stringForClipboard = blocksToClipboardString(blocks.slice(startIndex, endIndex));
+	navigator.clipboard.writeText(stringForClipboard);
 }
 
 window.onkeydown = event => {
+	const keyAliases = {
+		' ': 'Space',
+		"'": 'SingleQuote',
+	}
 	const keyCombo = (
 		(event.ctrlKey   ? 'Ctrl'  : '') +
 		(event.shiftKey  ? 'Shift' : '') +
 		(event.altKey    ? 'Alt'   : '') +
 		(event.metaKey   ? 'Meta'  : '') +
-		event.key
+		(keyAliases[event.key] || event.key)
 	);
 	let action = keyActionMap[keyCombo];
 	if (!action && event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
@@ -471,7 +599,8 @@ window.onkeydown = event => {
 document.body.onpaste = async event => {
 	const stringItems = [...event.clipboardData.items].filter(item => item.kind === 'string');
 	const strings = await Promise.all(stringItems.map(item => new Promise(resolve => item.getAsString(resolve))));
-	insertAtCaret([...strings.join('')]);
+	const pastedBlocks = clipboardStringToBlocks(strings.join(''));
+	insertAtCaret(pastedBlocks);
 }
 
 function getCaretPositionForPointerEvent(event) {

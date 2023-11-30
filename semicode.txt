@@ -7,8 +7,33 @@ Semicode is a superset of unicode. It introduces two new features:
 - The 'link' control character, which can be used to link three words together into a triple.
 - The 'embed' control character, which defines a variable-length block of bytes, which may itself be semicode.
 
-Any valid unicode document is a valid semicode document.
+Any valid unicode document is a valid semicode document. This document is written in semicode and displayed with a semicode editor.
 
-This document is written in semicode and displayed with a semicode editor.
+This is a block of bytes, inserted with the embed control character:
 
-fromviato
+16:a76808da81498ebca5d4ab5e100b2272
+
+It's 16 random bytes (a UUID), shown as a single block whose color is based on the hash of the bytes.
+Nodes in semicode's semantic web are intended to be globally unique, so UUIDs are a good fit for representing each unique concept to be expressed.
+
+This is the link control character:
+
+
+
+It's used to link three blocks/words into a semantic web triple:
+
+16:b824a2845bb58ae85f3761ded628196e16:bd80e99eac1dd0d153f5951b7101202a16:8e76fe9dfdee7cc89b020a5255590381
+
+This UUID can be used to control the appearance and layout of all text and blocks that follow it:
+
+16:815400a6d2abb412ebf3c5306a8ddbdftext_label_vialabel
+
+Now linking via 'label' will make every instance of that block have the given text label.
+
+16:b824a2845bb58ae85f3761ded628196elabelFido
+16:bd80e99eac1dd0d153f5951b7101202alabelSpecies
+16:8e76fe9dfdee7cc89b020a5255590381labelDog
+
+The meaning of the triple shown earlier is now more clear:
+
+16:b824a2845bb58ae85f3761ded628196e16:bd80e99eac1dd0d153f5951b7101202a16:8e76fe9dfdee7cc89b020a5255590381
