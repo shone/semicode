@@ -13,7 +13,7 @@ fetch('semicode.txt').then(async response => {
 const keyActionMap = {
 	CtrlSpace:           () => ec.insertAtCaret([Symbol()]),
 	CtrlBackslash:       () => ec.insertAtCaret([sc.LINK]),
-	CtrlSingleQuote:     () => ec.insertAtCaret([ec.LABEL]),
+	CtrlSingleQuote:     () => ec.insertAtCaret([sc.LABEL]),
 	ArrowRight:          () => ec.moveCaret(ec.caretPosition+1),
 	ArrowLeft:           () => ec.moveCaret(ec.caretPosition-1),
 	CtrlArrowRight:      () => ec.moveCaretWord(true),
@@ -41,6 +41,8 @@ const keyActionMap = {
 	Ctrlc:               () => copy(),
 	Tab:                 () => ec.insertAtCaret(['\t']),
 	Escape:              () => ec.deselect(),
+	Ctrl1:               () => ec.insertAtCaret([ec.GROW_ROW]),
+	Ctrl2:               () => ec.insertAtCaret([ec.GROW_COLUMN]),
 }
 
 window.onkeydown = event => {

@@ -4,7 +4,8 @@ export const blocks = [];
 export let caretPosition = 0;
 export let selectPosition = 0;
 
-export const LABEL = '\uE001';
+export const GROW_ROW = Symbol();
+export const GROW_COLUMN = Symbol();
 
 const whitespaceChars = new Set([' ', '\n', '\t', sc.LINK]);
 

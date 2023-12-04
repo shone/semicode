@@ -1,6 +1,7 @@
 export const LINK = '\uEEEE';
 export const EMBED = '\uEEEF';
 export const EMBED_BYTES = '\uEEEA';
+export const LABEL = '\uE001';
 
 const symbolToBytesMap = new Map(); // TODO: use WeakMap
 export function symbolToBytes(symbol) {
@@ -78,9 +79,19 @@ function isWordSeparator(char) {
 		case '\n':
 		case '\t':
 		case LINK:
+		case LABEL:
 			return true;
 	}
 	return false;
+}
+
+export function* arrayToLines(array) {
+	for (let i=0, lineStart=0, lineIndex=0; i<=array.length; i++) {
+		if (i === array.length || array[i] === '\n') {
+			yield {start: lineStart, end: i};
+			lineStart = i+1;
+		}
+	}
 }
 
 export function* arrayToWords(array) {
@@ -93,7 +104,7 @@ export function* arrayToWords(array) {
 					yield array.slice(wordStart, i).join('');
 				}
 			}
-			if (typeof array[i] === 'symbol' || array[i] === LINK) {
+			if (typeof array[i] === 'symbol' || array[i] === LINK || array[i] === LABEL) {
 				yield array[i];
 			}
 			wordStart = i+1;
@@ -105,27 +116,19 @@ export function* arrayToTriples(array) {
 	const words = arrayToWords(array);
 	let word = words.next().value;
 	while (word) {
-		// FROM
-		if (word === LINK) {
+		if (word !== LINK) {
 			word = words.next().value;
 			continue;
 		}
+
+		word = words.next().value;
+		if (!word || word === LINK) continue;
 		const from = word;
 
-		// LINK
-		word = words.next().value;
-		if (word !== LINK) continue;
-
-		// VIA
 		word = words.next().value;
 		if (!word || word === LINK) continue;
 		const via = word;
 
-		// LINK
-		word = words.next().value;
-		if (word !== LINK) continue;
-
-		// TO
 		word = words.next().value;
 		if (!word || word === LINK) continue;
 		const to = word;

@@ -39,6 +39,8 @@ body {
 	padding-left:  .3rem;
 	padding-right: .3rem;
 	word-break: break-word;
+	display: flex;
+	flex-direction: column;
 }
 
 #debug {
@@ -49,55 +51,69 @@ body {
 	height: 100%;
 }
 
-span.nested {
-	border: 1px solid var(--base00);
-	border-radius: 4px;
+div {
+	min-height: 1lh;
+	display: flex;
+	flex-direction: row;
 }
 
-span.bytes {
-	display: inline-block;
-	border-radius: 4px;
-	color: white;
-	padding-left:  .3rem;
-	padding-right: .3rem;
-}
-
-span.label {
-	border: 1px solid var(--base00);
-	border-radius: 4px;
-}
-
-span.selected {
-	background-color: var(--base02);
-	color: var(--base0);
-}
-
-span.whitespace {
-	color: #93A1A1;
-}
-
-[data-caret='before']::before,
-[data-caret='after']::after,
-body.empty::before {
-	content: 'I';
-}
-[data-caret]::before,
-[data-caret]::after,
-body.empty::before {
-	display: inline-block;
+#caret {
+	min-height: 1lh;
 	width: 0;
-	height: 1lh;
-	outline: 1px solid black;
-	outline-offset: -1px;
-	color: transparent;
+	position: relative;
 	pointer-events: none;
 }
-body:not(.pause-caret-blink) [data-caret]::before,
-body:not(.pause-caret-blink) [data-caret]::after,
-body:not(.pause-caret-blink).empty::before {
+#caret:not(.pause-blink) {
 	animation: .5s caret-blink infinite alternate steps(2, jump-none);
 }
 @keyframes caret-blink {
 	from { opacity: 1; }
 	to   { opacity: 0; }
+}
+#caret::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 2px;
+	height: 100%;
+	background: black;
+}
+
+span {
+	box-sizing: border-box;
+	min-height: 1lh;
+}
+
+span.nested {
+	border: 1px solid var(--base00);
+	border-radius: 4px;
+}
+span.bytes {
+	border-radius: 4px;
+	color: white;
+	padding-left:  .3rem;
+	padding-right: .3rem;
+}
+span.label {
+	border: 1px solid var(--base00);
+	border-radius: 4px;
+}
+span.selected {
+	background-color: var(--base02);
+	color: var(--base0);
+}
+span.whitespace {
+	color: #93A1A1;
+}
+span.newline {
+	flex-grow: 0 !important;
+	flex-basis: 0;
+}
+
+span.grow-row {
+	flex-grow: 1;
+}
+div.grow-column {
+	flex-grow: 1;
 }

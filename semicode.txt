@@ -22,17 +22,17 @@ This is the link control character:
 
 It's used to link three blocks/words into a semantic web triple:
 
-16:b824a2845bb58ae85f3761ded628196e16:bd80e99eac1dd0d153f5951b7101202a16:8e76fe9dfdee7cc89b020a5255590381
+16:b824a2845bb58ae85f3761ded628196e16:bd80e99eac1dd0d153f5951b7101202a16:8e76fe9dfdee7cc89b020a5255590381
 
 This UUID can be used to control the appearance and layout of all text and blocks that follow it:
 
-16:815400a6d2abb412ebf3c5306a8ddbdftext_label_via
+16:815400a6d2abb412ebf3c5306a8ddbdftext_label_via
 
 Now linking via 'label' will make every instance of that block have the given text label.
 
-16:b824a2845bb58ae85f3761ded628196eFido
-16:bd80e99eac1dd0d153f5951b7101202aSpecies
-16:8e76fe9dfdee7cc89b020a5255590381Dog
+16:b824a2845bb58ae85f3761ded628196eFido
+16:bd80e99eac1dd0d153f5951b7101202aSpecies
+16:8e76fe9dfdee7cc89b020a5255590381Dog
 
 The meaning of the triple shown earlier is now more clear:
 
