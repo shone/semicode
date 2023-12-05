@@ -31,9 +31,9 @@ export function insertAtCaret(blocks_) {
 	onspliceCallbacks.forEach(callback => callback(spliceStart, spliceLength, blocks_, removedBlocks));
 }
 
-export function moveCaret(position, keepSelection=false) {
+export function moveCaret(position, selection='clear-selection') {
 	caretPosition = clamp(position, 0, blocks.length);
-	if (!keepSelection) {
+	if (selection === 'clear-selection') {
 		selectPosition = caretPosition;
 	}
 	oncaretmoveCallbacks.forEach(callback => callback(caretPosition, selectPosition));
@@ -51,48 +51,48 @@ export function getLineIndicesAtPosition(position) {
 	return [startIndex, endIndex];
 }
 
-export function moveCaretLineStart(keepSelection=false) {
+export function moveCaretLineStart(selection='clear-selection') {
 	const [lineStart, lineEnd] = getLineIndicesAtPosition(caretPosition);
-	moveCaret(lineStart, keepSelection);
+	moveCaret(lineStart, selection);
 }
-export function moveCaretLineEnd(keepSelection=false) {
+export function moveCaretLineEnd(selection='clear-selection') {
 	const [lineStart, lineEnd] = getLineIndicesAtPosition(caretPosition);
-	moveCaret(lineEnd, keepSelection);
+	moveCaret(lineEnd, selection);
 }
 
-export function moveCaretWord(forwards=true, keepSelection=false) {
+export function moveCaretWord(direction='forwards', selection='clear-selection') {
 	let i = caretPosition;
-	if (forwards) {
+	if (direction === 'forwards') {
 		// Find next whitespace char
 		while (i < blocks.length && !whitespaceChars.has(blocks[i])) i++;
 		// Find next non-whitespace char
 		while (i < blocks.length && whitespaceChars.has(blocks[i])) i++;
-	} else {
+	} else if (direction === 'backwards') {
 		// Skip preceding whitespace
 		while (i > 0 && whitespaceChars.has(blocks[i-1])) i--;
 		// Find previous whitespace char
 		while (i > 0 && !whitespaceChars.has(blocks[i-1])) i--;
 	}
-	moveCaret(i, keepSelection);
+	moveCaret(i, selection);
 }
 
-export function moveCaretLine(direction='down', keepSelection=false) {
+export function moveCaretLine(direction='down', selection='clear-selection') {
 	const [currentLineStart, currentLineEnd] = getLineIndicesAtPosition(caretPosition);
 	if (direction === 'up' && currentLineStart === 0) {
 		moveCaret(0, keepSelection);
 		return;
 	}
 	if (direction === 'down' && currentLineEnd === blocks.length) {
-		moveCaret(blocks.length, keepSelection);
+		moveCaret(blocks.length, selection);
 		return;
 	}
 	const caretX = caretPosition - currentLineStart;
 	const targetLinePosition = (direction==='down') ? (currentLineEnd+1) : (currentLineStart-1);
 	const [targetLineStart, targetLineEnd] = getLineIndicesAtPosition(targetLinePosition);
-	moveCaret(targetLineStart + caretX, keepSelection);
+	moveCaret(targetLineStart + caretX, selection);
 }
 
-export function deleteAtCaret(backspace=true) {
+export function deleteAtCaret(direction='backwards') {
 	if (blocks.length === 0) {
 		return;
 	}
@@ -100,10 +100,10 @@ export function deleteAtCaret(backspace=true) {
 	let spliceStart = Math.min(selectPosition, caretPosition);
 	let spliceLength = Math.abs(selectPosition - caretPosition);
 	if (spliceLength === 0) {
-		if (backspace && spliceStart > 0) {
+		if (direction==='backwards' && spliceStart > 0) {
 			spliceStart--;
 			spliceLength = 1;
-		} else if (!backspace && spliceStart < blocks.length) {
+		} else if (direction==='forwards' && spliceStart < blocks.length) {
 			spliceLength = 1;
 		}
 	}
@@ -196,20 +196,6 @@ export function selectWordAtPosition(position) {
 	selectPosition = wordStart;
 	caretPosition = wordEnd;
 	oncaretmoveCallbacks.forEach(callback => callback(caretPosition, selectPosition));
-}
-
-function compareArrayBuffers(a, b) {
-	if (a.byteLength !== b.byteLength) {
-		return false;
-	}
-	const uint32A = new Uint32Array(a);
-	const uint32B = new Uint32Array(b);
-	for (let i=0; i<uint32A.length; i++) {
-		if (uint32A[i] !== uint32B[i]) {
-			return false;
-		}
-	}
-	return true;
 }
 
 function clamp(f, min, max) {
