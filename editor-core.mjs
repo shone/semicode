@@ -116,6 +116,8 @@ export function deleteAtCaret(backspace=true) {
 	caretPosition = spliceStart;
 	selectPosition = spliceStart;
 	onspliceCallbacks.forEach(callback => callback(spliceStart, spliceLength, [], deletedBlocks));
+
+	return deletedBlocks;
 }
 
 export function nestSelection() {

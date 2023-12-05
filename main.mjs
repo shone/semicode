@@ -39,6 +39,7 @@ const keyActionMap = {
 	Enter:               () => ec.insertAtCaret(['\n']),
 	Ctrla:               () => ec.selectAll(),
 	Ctrlc:               () => copy(),
+	Ctrlx:               () => cut(),
 	Tab:                 () => ec.insertAtCaret(['\t']),
 	Escape:              () => ec.deselect(),
 	Ctrl1:               () => ec.insertAtCaret([ec.GROW_ROW]),
@@ -65,7 +66,6 @@ window.onkeydown = event => {
 	if (action) {
 		event.preventDefault();
 		action();
-		// updateLabels();
 	}
 }
 
@@ -80,5 +80,14 @@ function copy() {
 	const startIndex = Math.min(ec.caretPosition, ec.selectPosition);
 	const endIndex = Math.max(ec.caretPosition, ec.selectPosition);
 	const semicode = sc.fromArray(ec.blocks.slice(startIndex, endIndex));
+	navigator.clipboard.writeText(semicode);
+}
+
+function cut() {
+	if (ec.selectPosition === ec.caretPosition) {
+		return;
+	}
+	const deletedBlocks = ec.deleteAtCaret();
+	const semicode = sc.fromArray(deletedBlocks);
 	navigator.clipboard.writeText(semicode);
 }
