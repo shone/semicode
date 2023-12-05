@@ -6,16 +6,7 @@ const divs = [];
 const caretEl = document.getElementById('caret');
 const spanToBlockMap = new Map();
 
-const randomByteArrayColors = [
-	'#b58900', // yellow
-	'#cb4b16', // orange
-	'#dc322f', // red
-	'#d33682', // magenta
-	'#6c71c4', // violet
-	'#268bd2', // blue
-	'#2aa198', // cyan
-	'#859900', // green
-]
+const colors = ['yellow','orange','red','magenta','violet','blue','cyan','green'];
 
 function makeSpanForBlock(block) {
 	const span = document.createElement('span');
@@ -40,7 +31,7 @@ function makeSpanForBlock(block) {
 		} else {
 			crypto.subtle.digest('sha-256', bytes).then(hash => {
 				const hashBytes = new Uint8Array(hash);
-				span.style.background = randomByteArrayColors[hashBytes[0]%randomByteArrayColors.length];
+				span.dataset.color = colors[hashBytes[0]%colors.length];
 			});
 			span.innerHTML = '&nbsp;&nbsp;';
 		}
