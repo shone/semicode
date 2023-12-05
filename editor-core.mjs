@@ -137,6 +137,27 @@ export function deleteAtCaret(direction='backwards') {
 	return splice(spliceStart, spliceLength);
 }
 
+export function duplicateLines(direction='down') {
+	const [start, end] = getSelectedLines();
+	if (start === end) {
+		return;
+	}
+	const lines = blocks.slice(start, end+1);
+	if (direction === 'down') {
+		if (end === blocks.length) {
+			lines.unshift('\n');
+		}
+		caretPosition += lines.length;
+		selectPosition += lines.length;
+		splice(end+1, 0, ...lines);
+	} else {
+		if (end === blocks.length) {
+			lines.push('\n');
+		}
+		splice(start, 0, ...lines);
+	}
+}
+
 export function deleteLineAtCaret() {
 	if (blocks.length === 0) {
 		return;
