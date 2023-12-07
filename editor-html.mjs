@@ -16,7 +16,7 @@ function makeSpanForBlock(block) {
 		span.innerHTML = '&nbsp;';
 	} else if (block === '\t') {
 		span.textContent = '» ';
-		span.classList.add('whitespace');
+		span.classList.add('tab');
 	} else if (block === sc.LINK) {
 		span.textContent = '➤';
 	} else if (block === sc.LABEL) {
