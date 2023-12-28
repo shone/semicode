@@ -23,6 +23,9 @@ export function bytesToSymbol(bytes) {
 	symbolToBytesMap.set(symbol, bytes);
 	return symbol;
 }
+export function hexStringToSymbol(hexString) {
+	return bytesToSymbol(hexStringToBytes(hexString));
+}
 
 export function toArray(semicode/*: string*/) {
 	const blocks = [];
@@ -113,27 +116,50 @@ export function* arrayToWords(array) {
 }
 
 export function* arrayToTriples(array) {
-	const words = arrayToWords(array);
-	let word = words.next().value;
-	while (word) {
-		if (word !== LINK) {
+	for (const line of arrayToLines(array)) {
+		const words = arrayToWords(array.slice(line.start, line.end));
+		let word = words.next().value;
+		while (word) {
+			if (word !== LINK) {
+				word = words.next().value;
+				continue;
+			}
+
 			word = words.next().value;
-			continue;
+			if (!word || word === LINK) continue;
+			const from = word;
+
+			word = words.next().value;
+			if (!word || word === LINK) continue;
+			const via = word;
+
+			word = words.next().value;
+			if (!word || word === LINK) continue;
+			const to = word;
+
+			yield [from, via, to];
 		}
+	}
+}
 
-		word = words.next().value;
-		if (!word || word === LINK) continue;
-		const from = word;
-
-		word = words.next().value;
-		if (!word || word === LINK) continue;
-		const via = word;
-
-		word = words.next().value;
-		if (!word || word === LINK) continue;
-		const to = word;
-
-		yield [from, via, to];
+export function* deduplicateTriples(triples) {
+	const symbolToIdMap = new Map();
+	let idCounter = 0;
+	function getSymbolId(symbol) {
+		let id = symbolToIdMap.get(symbol);
+		if (id === undefined) {
+			id = idCounter++;
+			symbolToIdMap.set(symbol, id);
+		}
+		return id;
+	}
+	const triplesAlreadySeen = new Set();
+	for (const triple of triples) {
+		const tripleSetEntry = triple.map(getSymbolId).join('-');
+		if (!triplesAlreadySeen.has(tripleSetEntry)) {
+			yield triple;
+			triplesAlreadySeen.add(tripleSetEntry);
+		}
 	}
 }
 
@@ -154,7 +180,7 @@ function compareArrayBuffers(a, b) {
 function byteToHexString(byte) {
 	return ('0' + (byte & 0xFF).toString(16)).slice(-2);
 }
-function hexStringToBytes(string) {
+export function hexStringToBytes(string) {
 	const byteCount = string.length / 2;
 	const bytes = new Uint8Array(byteCount);
 	for (let i=0; i<byteCount; i++) {
@@ -163,6 +189,12 @@ function hexStringToBytes(string) {
 	return bytes;
 }
 
-function toHexString(byteArray) {
+export function toHexString(byteArray) {
 	return Array.from(byteArray, byteToHexString).join('');
+}
+
+export function makeRandomHexString() {
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	return toHexString(bytes);
 }

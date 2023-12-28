@@ -5,13 +5,40 @@ export let caretPosition = 0;
 export let selectPosition = 0;
 
 export const GROW_ROW = Symbol();
+export const SHRINK_ROW = Symbol();
 export const GROW_COLUMN = Symbol();
+
+export const functions = new Map();
 
 const whitespaceChars = new Set([' ', '\n', '\t', sc.LINK]);
 
 const onspliceCallbacks = [];
 export function onsplice(callback) {
 	onspliceCallbacks.push(callback);
+}
+
+const onembedspliceCallbacks = [];
+export function onembedsplice(callback) {
+	onembedspliceCallbacks.push(callback);
+}
+
+function applyFunctions() {
+	for (let i=0; i<blocks.length; i++) {
+		const f = functions.get(blocks[i]);
+		if (!f) {
+			continue;
+		}
+		const [lineStart, lineEnd] = getLineIndicesAtPosition(i);
+		const args = blocks.slice(i+1, lineEnd).filter(block => typeof block === 'symbol');
+		const targetIndex = blocks.slice(i+1, lineEnd).findIndex(block => Array.isArray(block));
+		if (targetIndex === -1) {
+			continue;
+		}
+		const target = blocks[i+1+targetIndex];
+		f(ec.blocks, args, target);
+		onembedspliceCallbacks.forEach(callback => callback(i+1+targetIndex));
+		i += targetIndex+1;
+	}
 }
 
 const oncaretmoveCallbacks = [];
@@ -25,6 +52,7 @@ export function splice(start, deleteCount, ...blocks_) {
 	}
 	const deletedBlocks = blocks.splice(start, deleteCount, ...blocks_);
 	onspliceCallbacks.forEach(callback => callback(start, deleteCount, blocks_, deletedBlocks));
+	applyFunctions();
 	return deletedBlocks;
 }
 
@@ -83,15 +111,21 @@ export function moveCaretLineEnd(selection='clear-selection') {
 export function moveCaretWord(direction='forwards', selection='clear-selection') {
 	let i = caretPosition;
 	if (direction === 'forwards') {
-		// Find next whitespace char
-		while (i < blocks.length && !whitespaceChars.has(blocks[i])) i++;
-		// Find next non-whitespace char
+		// Skip non-whitespace
+		while (i < blocks.length && !whitespaceChars.has(blocks[i])) {
+			i++;
+			if (typeof blocks[i] !== 'string') break;
+		}
+		// Skip whitespace
 		while (i < blocks.length && whitespaceChars.has(blocks[i])) i++;
 	} else if (direction === 'backwards') {
 		// Skip preceding whitespace
 		while (i > 0 && whitespaceChars.has(blocks[i-1])) i--;
-		// Find previous whitespace char
-		while (i > 0 && !whitespaceChars.has(blocks[i-1])) i--;
+		// Find preceding non-whitespace
+		while (i > 0 && !whitespaceChars.has(blocks[i-1])) {
+			i--;
+			if (typeof blocks[i] !== 'string') break;
+		}
 	}
 	moveCaret(i, selection);
 }
@@ -199,8 +233,8 @@ export function moveLines(direction='down') {
 export function nestSelection() {
 	const spliceStart = Math.min(selectPosition, caretPosition);
 	const spliceLength = Math.abs(selectPosition - caretPosition);
-	selectPosition = spliceStart;
 	caretPosition = spliceStart + 1;
+	selectPosition = caretPosition;
 	const nestedBlock = blocks.slice(spliceStart, spliceStart + spliceLength);
 	return splice(spliceStart, spliceLength, nestedBlock);
 }

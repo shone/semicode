@@ -36,4 +36,4 @@ Now linking via 'label' will make every instance of that block have the given te
 
 The meaning of the triple shown earlier is now more clear:
 
-16:b824a2845bb58ae85f3761ded628196e16:bd80e99eac1dd0d153f5951b7101202a16:8e76fe9dfdee7cc89b020a5255590381
+16:b824a2845bb58ae85f3761ded628196e16:bd80e99eac1dd0d153f5951b7101202a16:8e76fe9dfdee7cc89b020a5255590381

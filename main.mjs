@@ -1,9 +1,13 @@
 import * as sc from './semicode.mjs';
 import * as ec from './editor-core.mjs';
+import * as functions from './functions.mjs';
 import './editor-html.mjs';
 
 window.sc = sc;
 window.ec = ec;
+
+const functionLabels = [...ec.functions.entries()].map(([symbol, f]) => [sc.LINK, symbol, sc.LABEL, f.name, ' ']).flat();
+ec.insertAtCaret(functionLabels.concat(['\n']));
 
 fetch('semicode.txt').then(async response => {
 	const semicode = await response.text();
@@ -50,7 +54,9 @@ const keyActionMap = {
 	Tab:                 () => ec.insertAtCaret(['\t']),
 	Escape:              () => ec.deselect(),
 	Ctrl1:               () => ec.insertAtCaret([ec.GROW_ROW]),
+	'CtrlShift!':        () => ec.insertAtCaret([ec.SHRINK_ROW]),
 	Ctrl2:               () => ec.insertAtCaret([ec.GROW_COLUMN]),
+	Ctrl3:               () => ec.insertAtCaret([ec.TEST_FUNC]),
 }
 
 window.onkeydown = event => {

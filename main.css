@@ -94,9 +94,13 @@ span {
 span.nested {
 	border: 1px solid var(--base00);
 	border-radius: 4px;
+	min-width: calc(var(--char-width) * 2);
+	margin-left:  1px;
+	margin-right: 1px;
+	padding-left:  .3rem;
+	padding-right: .3rem;
 }
 span.bytes {
-	height: 1lh;
 	color: white;
 	padding-left:  .3rem;
 	padding-right: .3rem;
@@ -125,6 +129,7 @@ span.tab {
 span.newline {
 	flex-grow: 0 !important;
 	flex-basis: 0;
+	min-width: 0;
 }
 
 span[data-color='yellow' ] { --color: var(--yellow);  }
@@ -136,7 +141,7 @@ span[data-color='blue'   ] { --color: var(--blue);    }
 span[data-color='cyan'   ] { --color: var(--cyan);    }
 span[data-color='green'  ] { --color: var(--green);   }
 
-span.grow-row {
+span.nested.grow-row {
 	flex-grow: 1;
 }
 div.grow-column {

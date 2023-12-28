@@ -27,7 +27,7 @@ function makeSpanForBlock(block) {
 	} else if (typeof block === 'symbol') {
 		const bytes = sc.symbolToBytes(block);
 		if (bytes.length <= 2) {
-			span.textContent = toHexString(bytes);
+			span.textContent = sc.toHexString(bytes);
 		} else {
 			crypto.subtle.digest('sha-256', bytes).then(hash => {
 				const hashBytes = new Uint8Array(hash);
@@ -37,7 +37,11 @@ function makeSpanForBlock(block) {
 		}
 		span.classList.add('bytes');
 	} else if (Array.isArray(block)) {
-		span.append(...block.map(makeSpanForBlock));
+		for (const line of sc.arrayToLines(block)) {
+			const div = document.createElement('div');
+			div.append(...block.slice(line.start, line.end+1).map(makeSpanForBlock));
+			span.append(div);
+		}
 		span.classList.add('nested');
 	}
 	spanToBlockMap.set(span, block);
@@ -48,7 +52,10 @@ ec.onsplice((start, length, added, removed) => {
 	pauseCaretBlink();
 	const newSpans = added.map(makeSpanForBlock);
 	const removedSpans = spans.splice(start, length, ...newSpans);
-	removedSpans.forEach(span => span.remove());
+	for (const removedSpan of removedSpans) {
+		removedSpan.remove();
+		spanToBlockMap.delete(removedSpan);
+	}
 
 	const lines = [...sc.arrayToLines(ec.blocks)];
 	if (divs.length < lines.length) {
@@ -64,6 +71,18 @@ ec.onsplice((start, length, added, removed) => {
 	setCaretElPosition(ec.caretPosition);
 	caretEl.scrollIntoView({block: 'nearest', inline: 'nearest'});
 
+	updateLabels();
+});
+
+ec.onembedsplice(position => {
+	const block = ec.blocks[position];
+	const span = spans[position];
+	span.innerHTML = '';
+	for (const line of sc.arrayToLines(block)) {
+		const div = document.createElement('div');
+		div.append(...block.slice(line.start, line.end+1).map(makeSpanForBlock));
+		span.append(div);
+	}
 	updateLabels();
 });
 
@@ -103,14 +122,14 @@ function updateLabels() {
 	const triples = [...sc.arrayToTriples(ec.blocks)];
 	const blockToLabelMap = new Map();
 	blockToLabelMap.set(ec.GROW_ROW, 'GR');
+	blockToLabelMap.set(ec.SHRINK_ROW, 'SR');
 	blockToLabelMap.set(ec.GROW_COLUMN, 'GC');
 	for (const triple of triples) {
 		if (typeof triple[0] === 'symbol' && triple[1] === sc.LABEL && (typeof triple[2] === 'string')) {
 			blockToLabelMap.set(triple[0], triple[2]);
 		}
 	}
-	for (const span of spans) {
-		const block = spanToBlockMap.get(span);
+	for (const [span, block] of spanToBlockMap.entries()) {
 		if (typeof block === 'symbol') {
 			const label = blockToLabelMap.get(block);
 			if (label) {
@@ -123,13 +142,10 @@ function updateLabels() {
 	let growRow = false;
 	let growColumn = false;
 	for (let i=0; i<ec.blocks.length; i++) {
-		if (ec.blocks[i] === ec.GROW_ROW) {
-			growRow = true;
-			continue;
-		}
-		if (ec.blocks[i] === ec.GROW_COLUMN) {
-			growColumn = true;
-			continue;
+		switch (ec.blocks[i]) {
+			case ec.GROW_ROW:    growRow    = true;  continue;
+			case ec.SHRINK_ROW:  growRow    = false; continue;
+			case ec.GROW_COLUMN: growColumn = true;  continue;
 		}
 		spans[i].classList.toggle('grow-row', growRow);
 		spans[i].parentElement.classList.toggle('grow-column', growColumn);
