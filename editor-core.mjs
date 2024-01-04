@@ -1,6 +1,7 @@
 import * as sc from './semicode.mjs';
 
 export const blocks = [];
+export let caretPath = [blocks];
 export let caretPosition = 0;
 export let selectPosition = 0;
 
@@ -17,26 +18,22 @@ export function onsplice(callback) {
 	onspliceCallbacks.push(callback);
 }
 
-const onembedspliceCallbacks = [];
-export function onembedsplice(callback) {
-	onembedspliceCallbacks.push(callback);
-}
-
 function applyFunctions() {
 	for (let i=0; i<blocks.length; i++) {
 		const f = functions.get(blocks[i]);
 		if (!f) {
 			continue;
 		}
-		const [lineStart, lineEnd] = getLineIndicesAtPosition(i);
+		const [lineStart, lineEnd] = getLineIndicesAtPosition(blocks, i);
 		const args = blocks.slice(i+1, lineEnd).filter(block => typeof block === 'symbol');
 		const targetIndex = blocks.slice(i+1, lineEnd).findIndex(block => Array.isArray(block));
 		if (targetIndex === -1) {
 			continue;
 		}
 		const target = blocks[i+1+targetIndex];
+		const targetBefore = [...target];
 		f(ec.blocks, args, target);
-		onembedspliceCallbacks.forEach(callback => callback(i+1+targetIndex));
+		onspliceCallbacks.forEach(callback => callback(target, 0, targetBefore.length, target, targetBefore));
 		i += targetIndex+1;
 	}
 }
@@ -46,13 +43,13 @@ export function oncaretmove(callback) {
 	oncaretmoveCallbacks.push(callback);
 }
 
-export function splice(start, deleteCount, ...blocks_) {
+export function splice(context, start, deleteCount, ...blocks_) {
 	if (deleteCount === 0 && blocks_.length === 0) {
 		return;
 	}
-	const deletedBlocks = blocks.splice(start, deleteCount, ...blocks_);
-	onspliceCallbacks.forEach(callback => callback(start, deleteCount, blocks_, deletedBlocks));
-	applyFunctions();
+	const deletedBlocks = context.splice(start, deleteCount, ...blocks_);
+	onspliceCallbacks.forEach(callback => callback(context, start, deleteCount, blocks_, deletedBlocks));
+	// applyFunctions();
 	return deletedBlocks;
 }
 
@@ -64,24 +61,27 @@ export function insertAtCaret(blocks_) {
 	const spliceLength = Math.abs(caretPosition - selectPosition);
 	caretPosition = spliceStart + blocks_.length;
 	selectPosition = caretPosition;
-	return splice(spliceStart, spliceLength, ...blocks_);
+	return splice(caretPath.at(-1), spliceStart, spliceLength, ...blocks_);
 }
 
-export function moveCaret(position, selection='clear-selection') {
-	caretPosition = clamp(position, 0, blocks.length);
+export function moveCaret(position, selection='clear-selection', contextPath=caretPath) {
+	if (contextPath !== caretPath) {
+		caretPath.splice(0, caretPath.length, ...contextPath);
+	}
+	caretPosition = clamp(position, 0, contextPath.at(-1).length);
 	if (selection === 'clear-selection') {
 		selectPosition = caretPosition;
 	}
-	oncaretmoveCallbacks.forEach(callback => callback(caretPosition, selectPosition));
+	oncaretmoveCallbacks.forEach(callback => callback(contextPath.at(-1), caretPosition, selectPosition));
 }
 
-export function getLineIndicesAtPosition(position) {
+export function getLineIndicesAtPosition(context, position) {
 	let startIndex = position;
 	let endIndex = position;
-	while (startIndex > 0 && blocks[startIndex-1] !== '\n') {
+	while (startIndex > 0 && context[startIndex-1] !== '\n') {
 		startIndex--;
 	}
-	while (endIndex < blocks.length && blocks[endIndex] !== '\n') {
+	while (endIndex < context.length && context[endIndex] !== '\n') {
 		endIndex++;
 	}
 	return [startIndex, endIndex];
@@ -90,64 +90,99 @@ export function getLineIndicesAtPosition(position) {
 export function getSelectedLines() {
 	let start = Math.min(caretPosition, selectPosition);
 	let end = Math.max(caretPosition, selectPosition);
-	while (start > 0 && blocks[start-1] !== '\n') {
+	const caretContext = caretPath.at(-1);
+	while (start > 0 && caretContext[start-1] !== '\n') {
 		start--;
 	}
-	while (end < blocks.length && blocks[end] !== '\n') {
+	while (end < caretContext.length && caretContext[end] !== '\n') {
 		end++;
 	}
 	return [start, end];
 }
 
 export function moveCaretLineStart(selection='clear-selection') {
-	const [lineStart, lineEnd] = getLineIndicesAtPosition(caretPosition);
+	const [lineStart, lineEnd] = getLineIndicesAtPosition(caretPath.at(-1), caretPosition);
 	moveCaret(lineStart, selection);
 }
 export function moveCaretLineEnd(selection='clear-selection') {
-	const [lineStart, lineEnd] = getLineIndicesAtPosition(caretPosition);
+	const [lineStart, lineEnd] = getLineIndicesAtPosition(caretPath.at(-1), caretPosition);
 	moveCaret(lineEnd, selection);
 }
 
 export function moveCaretWord(direction='forwards', selection='clear-selection') {
 	let i = caretPosition;
+	const caretContext = caretPath.at(-1);
 	if (direction === 'forwards') {
 		// Skip non-whitespace
-		while (i < blocks.length && !whitespaceChars.has(blocks[i])) {
+		while (i < caretContext.length && !whitespaceChars.has(caretContext[i])) {
 			i++;
-			if (typeof blocks[i] !== 'string') break;
+			if (typeof caretContext[i] !== 'string') break;
 		}
 		// Skip whitespace
-		while (i < blocks.length && whitespaceChars.has(blocks[i])) i++;
+		while (i < caretContext.length && whitespaceChars.has(caretContext[i])) i++;
 	} else if (direction === 'backwards') {
 		// Skip preceding whitespace
-		while (i > 0 && whitespaceChars.has(blocks[i-1])) i--;
+		while (i > 0 && whitespaceChars.has(caretContext[i-1])) i--;
 		// Find preceding non-whitespace
-		while (i > 0 && !whitespaceChars.has(blocks[i-1])) {
+		while (i > 0 && !whitespaceChars.has(caretContext[i-1])) {
 			i--;
-			if (typeof blocks[i] !== 'string') break;
+			if (typeof caretContext[i] !== 'string') break;
 		}
 	}
 	moveCaret(i, selection);
 }
 
 export function moveCaretLine(direction='down', selection='clear-selection') {
-	const [currentLineStart, currentLineEnd] = getLineIndicesAtPosition(caretPosition);
+	const caretContext = caretPath.at(-1);
+	const [currentLineStart, currentLineEnd] = getLineIndicesAtPosition(caretContext, caretPosition);
 	if (direction === 'up' && currentLineStart === 0) {
 		moveCaret(0, selection);
 		return;
 	}
-	if (direction === 'down' && currentLineEnd === blocks.length) {
-		moveCaret(blocks.length, selection);
+	if (direction === 'down' && currentLineEnd === caretContext.length) {
+		moveCaret(caretContext.length, selection);
 		return;
 	}
 	const caretX = caretPosition - currentLineStart;
 	const targetLinePosition = (direction==='down') ? (currentLineEnd+1) : (currentLineStart-1);
-	const [targetLineStart, targetLineEnd] = getLineIndicesAtPosition(targetLinePosition);
+	const [targetLineStart, targetLineEnd] = getLineIndicesAtPosition(caretContext, targetLinePosition);
 	moveCaret(Math.min(targetLineStart + caretX, targetLineEnd), selection);
 }
 
+export function moveCaretAcrossEmbed(direction='forwards') {
+	if (direction === 'forwards') {
+		if (Array.isArray(caretPath.at(-1)[caretPosition])) {
+			caretPath.push(caretPath.at(-1)[caretPosition]);
+			caretPosition = 0;
+		} else if (caretPosition === caretPath.at(-1).length && caretPath.length > 1) {
+			caretPosition = caretPath.at(-2).indexOf(caretPath.at(-1)) + 1;
+			caretPath.pop();
+		} else if (caretPosition < caretPath.at(-1).length) {
+			caretPosition++;
+		}
+	} else if (direction === 'backwards') {
+		if (Array.isArray(caretPath.at(-1)[caretPosition-1])) {
+			caretPath.push(caretPath.at(-1)[caretPosition-1]);
+			caretPosition = caretPath.at(-1).length;
+		} else if (caretPosition === 0 && caretPath.length > 1) {
+			caretPosition = caretPath.at(-2).indexOf(caretPath.at(-1));
+			caretPath.pop();
+		} else if (caretPosition > 0) {
+			caretPosition--;
+		}
+	} else if (direction === 'up') {
+		if (caretPath.length > 1) {
+			caretPosition = caretPath.at(-2).indexOf(caretPath.at(-1));
+			caretPath.pop();
+		}
+	}
+	selectPosition = caretPosition;
+	oncaretmoveCallbacks.forEach(callback => callback(caretPath.at(-1), caretPosition, selectPosition));
+}
+
 export function deleteAtCaret(direction='backwards') {
-	if (blocks.length === 0) {
+	const caretContext = caretPath.at(-1);
+	if (caretContext.length === 0) {
 		return;
 	}
 
@@ -157,7 +192,7 @@ export function deleteAtCaret(direction='backwards') {
 		if (direction==='backwards' && spliceStart > 0) {
 			spliceStart--;
 			spliceLength = 1;
-		} else if (direction==='forwards' && spliceStart < blocks.length) {
+		} else if (direction==='forwards' && spliceStart < caretContext.length) {
 			spliceLength = 1;
 		}
 	}
@@ -168,79 +203,84 @@ export function deleteAtCaret(direction='backwards') {
 
 	caretPosition = spliceStart;
 	selectPosition = spliceStart;
-	return splice(spliceStart, spliceLength);
+	return splice(caretContext, spliceStart, spliceLength);
 }
 
 export function duplicateLines(direction='down') {
+	const caretContext = caretPath.at(-1);
 	const [start, end] = getSelectedLines();
 	if (start === end) {
 		return;
 	}
-	const lines = blocks.slice(start, end+1);
+	const lines = caretContext.slice(start, end+1);
 	if (direction === 'down') {
-		if (end === blocks.length) {
+		if (end === caretContext.length) {
 			lines.unshift('\n');
 		}
 		caretPosition += lines.length;
 		selectPosition += lines.length;
-		splice(end+1, 0, ...lines);
+		splice(caretContext, end+1, 0, ...lines);
 	} else {
-		if (end === blocks.length) {
+		if (end === caretContext.length) {
 			lines.push('\n');
 		}
-		splice(start, 0, ...lines);
+		splice(caretContext, start, 0, ...lines);
 	}
 }
 
 export function deleteLineAtCaret() {
-	if (blocks.length === 0) {
+	const caretContext = caretPath.at(-1);
+	if (caretContext.length === 0) {
 		return;
 	}
-	const [lineStart, lineEnd] = getLineIndicesAtPosition(caretPosition);
+	const [lineStart, lineEnd] = getLineIndicesAtPosition(caretContext, caretPosition);
 	caretPosition = lineStart;
 	selectPosition = lineStart;
-	return splice(lineStart, (lineEnd-lineStart) + 1);
+	return splice(caretContext, lineStart, (lineEnd-lineStart) + 1);
 }
 
 export function moveLines(direction='down') {
+	const caretContext = caretPath.at(-1);
 	const [start, end] = getSelectedLines();
-	if (direction==='down' && end===blocks.length) {
+	if (direction==='down' && end===caretContext.length) {
 		return;
 	}
 	if (direction==='up' && start===0) {
 		return;
 	}
-	const [swapLineStart, swapLineEnd] = getLineIndicesAtPosition(direction==='down'?(end+1):(start-1));
+	const [swapLineStart, swapLineEnd] = getLineIndicesAtPosition(caretContext, direction==='down'?(end+1):(start-1));
 	if (direction === 'down') {
 		caretPosition += (swapLineEnd-swapLineStart) + 1;
 		selectPosition += (swapLineEnd-swapLineStart) + 1;
-		const removedBlocks = splice(swapLineStart, (swapLineEnd-swapLineStart)+1);
+		const removedBlocks = splice(caretContext, swapLineStart, (swapLineEnd-swapLineStart)+1);
 		if (removedBlocks.length===0 || removedBlocks[removedBlocks.length-1]!=='\n') {
 			removedBlocks.push('\n');
 		}
-		splice(start, 0, ...removedBlocks);
+		splice(caretContext, start, 0, ...removedBlocks);
 	} else if (direction === 'up') {
 		caretPosition -= (end-start) + 1;
 		selectPosition -= (end-start) + 1;
-		const removedBlocks = splice(start, (end-start)+1);
+		const removedBlocks = splice(caretContext, start, (end-start)+1);
 		if (removedBlocks.length===0 || removedBlocks[removedBlocks.length-1]!=='\n') {
 			removedBlocks.push('\n');
 		}
-		splice(swapLineStart, 0, ...removedBlocks);
+		splice(caretContext, swapLineStart, 0, ...removedBlocks);
 	}
 }
 
 export function nestSelection() {
+	const caretContext = caretPath.at(-1);
 	const spliceStart = Math.min(selectPosition, caretPosition);
 	const spliceLength = Math.abs(selectPosition - caretPosition);
 	caretPosition = spliceStart + 1;
 	selectPosition = caretPosition;
-	const nestedBlock = blocks.slice(spliceStart, spliceStart + spliceLength);
-	return splice(spliceStart, spliceLength, nestedBlock);
+	const nestedBlock = caretContext.slice(spliceStart, spliceStart + spliceLength);
+	return splice(caretContext, spliceStart, spliceLength, nestedBlock);
 }
 
 export function unnestBlock(blockIndex) {
-	const block = blocks[blockIndex];
+	const caretContext = caretPath.at(-1);
+	const block = caretContext[blockIndex];
 	if (!Array.isArray(block)) {
 		return;
 	}
@@ -250,35 +290,35 @@ export function unnestBlock(blockIndex) {
 	if (selectPosition >= blockIndex) {
 		selectPosition += block.length - 1;
 	}
-	return splice(blockIndex, 1, ...block);
+	return splice(caretContext, blockIndex, 1, ...block);
 }
 export function unnest() {
+	const caretContext = caretPath.at(-1);
 	function getNestedBlock() {
 		const selectionStart = Math.min(selectPosition, caretPosition);
 		const selectionEnd = Math.max(selectPosition, caretPosition);
 		for (let i=selectionStart; i<selectionEnd; i++) {
-			if (Array.isArray(blocks[i])) {
+			if (Array.isArray(caretContext[i])) {
 				return i;
 			}
 		}
 		return null;
 	}
-	while (true) {
-		const blockIndex = getNestedBlock();
-		if (blockIndex === null) {
-			return;
+	const blockIndex = getNestedBlock();
+	if (blockIndex === null) {
+		return;
 		}
-		unnestBlock(blockIndex);
-	}
+	unnestBlock(blockIndex);
 }
 
 export function selectAll() {
-	if (blocks.length === 0) {
+	const caretContext = caretPath.at(-1);
+	if (caretContext.length === 0) {
 		return;
 	}
-	caretPosition = blocks.length;
+	caretPosition = caretContext.length;
 	selectPosition = 0;
-	oncaretmoveCallbacks.forEach(callback => callback(caretPosition, selectPosition));
+	oncaretmoveCallbacks.forEach(callback => callback(caretContext, caretPosition, selectPosition));
 }
 
 export function deselect() {
@@ -288,21 +328,25 @@ export function deselect() {
 	}
 }
 
-export function selectWordAtPosition(position) {
-	if (whitespaceChars.has(blocks[position])) {
+export function selectWordAtPosition(position, contextPath=caretPath) {
+	if (contextPath !== caretPath) {
+		caretPath.splice(0, caretPath.length, ...contextPath);
+	}
+	const context = contextPath.at(-1);
+	if (whitespaceChars.has(context[position])) {
 		return;
 	}
 	let wordStart = position;
-	while (wordStart > 0 && !whitespaceChars.has(blocks[wordStart-1])) {
+	while (wordStart > 0 && !whitespaceChars.has(context[wordStart-1])) {
 		wordStart--;
 	}
 	let wordEnd = position;
-	while (wordEnd < blocks.length && !whitespaceChars.has(blocks[wordEnd])) {
+	while (wordEnd < context.length && !whitespaceChars.has(context[wordEnd])) {
 		wordEnd++;
 	}
 	selectPosition = wordStart;
 	caretPosition = wordEnd;
-	oncaretmoveCallbacks.forEach(callback => callback(caretPosition, selectPosition));
+	oncaretmoveCallbacks.forEach(callback => callback(context, caretPosition, selectPosition));
 }
 
 function clamp(f, min, max) {

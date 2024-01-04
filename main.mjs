@@ -6,12 +6,12 @@ import './editor-html.mjs';
 window.sc = sc;
 window.ec = ec;
 
-const functionLabels = [...ec.functions.entries()].map(([symbol, f]) => [sc.LINK, symbol, sc.LABEL, f.name, ' ']).flat();
-ec.insertAtCaret(functionLabels.concat(['\n']));
+// const functionLabels = [...ec.functions.entries()].map(([symbol, f]) => [sc.LINK, symbol, sc.LABEL, f.name, ' ']).flat();
+// ec.insertAtCaret(functionLabels.concat(['\n']));
 
 fetch('semicode.txt').then(async response => {
 	const semicode = await response.text();
-	ec.insertAtCaret(sc.toArray(semicode));
+	ec.insertAtCaret([...sc.toArray(semicode)]);
 });
 
 const keyActionMap = {
@@ -24,6 +24,9 @@ const keyActionMap = {
 	CtrlArrowLeft:       () => ec.moveCaretWord('backwards'),
 	CtrlShiftArrowRight: () => ec.moveCaretWord('forwards', 'keep-selection'),
 	CtrlShiftArrowLeft:  () => ec.moveCaretWord('backwards', 'keep-selection'),
+	AltArrowRight:       () => ec.moveCaretAcrossEmbed('forwards'),
+	AltArrowLeft:        () => ec.moveCaretAcrossEmbed('backwards'),
+	AltArrowUp:          () => ec.moveCaretAcrossEmbed('up'),
 	ArrowUp:             () => ec.moveCaretLine('up'),
 	ArrowDown:           () => ec.moveCaretLine('down'),
 	ShiftArrowUp:        () => ec.moveCaretLine('up', 'keep-selection'),
@@ -39,9 +42,9 @@ const keyActionMap = {
 	ShiftHome:           () => ec.moveCaretLineStart('keep-selection'),
 	ShiftEnd:            () => ec.moveCaretLineEnd('keep-selection'),
 	CtrlHome:            () => ec.moveCaret(0),
-	CtrlEnd:             () => ec.moveCaret(ec.blocks.length),
+	CtrlEnd:             () => ec.moveCaret(ec.caretPath.at(-1).length),
 	CtrlShiftHome:       () => ec.moveCaret(0, 'keep-selection'),
-	CtrlShiftEnd:        () => ec.moveCaret(ec.blocks.length, 'keep-selection'),
+	CtrlShiftEnd:        () => ec.moveCaret(ec.caretPath.at(-1).length, 'keep-selection'),
 	ShiftEnter:          () => ec.nestSelection(),
 	CtrlShiftEnter:      () => ec.unnest(),
 	Backspace:           () => ec.deleteAtCaret('backwards'),
@@ -85,14 +88,14 @@ window.onkeydown = event => {
 document.body.onpaste = async event => {
 	const stringItems = [...event.clipboardData.items].filter(item => item.kind === 'string');
 	const strings = await Promise.all(stringItems.map(item => new Promise(resolve => item.getAsString(resolve))));
-	const pastedBlocks = sc.toArray(strings.join(''));
+	const pastedBlocks = [...sc.toArray(strings.join(''))];
 	ec.insertAtCaret(pastedBlocks);
 }
 
 function copy() {
 	const startIndex = Math.min(ec.caretPosition, ec.selectPosition);
 	const endIndex = Math.max(ec.caretPosition, ec.selectPosition);
-	const semicode = sc.fromArray(ec.blocks.slice(startIndex, endIndex));
+	const semicode = sc.fromArray(ec.caretPath.at(-1).slice(startIndex, endIndex));
 	navigator.clipboard.writeText(semicode);
 }
 

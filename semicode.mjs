@@ -27,49 +27,56 @@ export function hexStringToSymbol(hexString) {
 	return bytesToSymbol(hexStringToBytes(hexString));
 }
 
-export function toArray(semicode/*: string*/) {
-	const blocks = [];
+export function* toArray(semicode/*: string*/) {
 	for (let i=0; i<semicode.length; i++) {
-		if (semicode[i] === EMBED) {
+		const char = semicode[i];
+		if (char === EMBED || char === EMBED_BYTES) {
 			i++;
 			const embedLengthIndex = i;
 			while (semicode[i] !== ':') {
 				i++;
+				if (i >= semicode.length) {
+					throw `Error while converting semicode to array: reached end before corresponding embed length semicolon found.`;
+				}
 			}
-			const embedLength = parseInt(semicode.slice(embedLengthIndex, i));
-			const embeddedString = semicode.slice(i+1, i+1+embedLength);
-			blocks.push(toArray(embeddedString));
-			i += embedLength;
-		} else if (semicode[i] === EMBED_BYTES) {
-			i++;
-			const embedLengthIndex = i;
-			while (semicode[i] !== ':') {
-				i++;
+			const embedLengthString = semicode.slice(embedLengthIndex, i);
+			const embedLength = parseInt(embedLengthString);
+			if (isNaN(embedLength)) {
+				throw `Error while converting semicode to array: could not parse embed length "${embedLengthString}" as integer.`;
 			}
-			const embedLength = parseInt(semicode.slice(embedLengthIndex, i)) * 2;
-			const embeddedString = semicode.slice(i+1, i+1+embedLength);
-			const bytes = hexStringToBytes(embeddedString);
-			const symbol = bytesToSymbol(bytes);
-			blocks.push(symbol);
-			i += embedLength;
+			if (embedLength < 0) {
+				throw `Error while converting semicode to array: embed length "${embedLengthString}" is negative.`;
+			}
+			if (char === EMBED) {
+				const embeddedString = semicode.slice(i+1, i+1+embedLength);
+				yield [...toArray(embeddedString)];
+				i += embedLength;
+			} else if (char === EMBED_BYTES) {
+				const embeddedString = semicode.slice(i+1, i+1+(embedLength*2));
+				const bytes = hexStringToBytes(embeddedString);
+				const symbol = bytesToSymbol(bytes);
+				yield symbol;
+				i += embedLength * 2;
+			}
 		} else {
-			blocks.push(semicode[i]);
+			yield char;
 		}
 	}
-	return blocks;
 }
 export function fromArray(array) {
-	return array.flatMap(block => {
+	return array.flatMap((block, index) => {
 		if (typeof block === 'string') {
 			return block;
 		}
 		if (Array.isArray(block)) {
-			return `${EMBED}${block.length}:${fromArray(block)}`;
+			const semicode = fromArray(block);
+			return `${EMBED}${semicode.length}:${semicode}`;
 		}
 		if (typeof block === 'symbol') {
-			const bytes = symbolToBytesMap.get(block);
+			const bytes = symbolToBytes(block);
 			return `${EMBED_BYTES}${bytes.length}:${[...bytes].map(byteToHexString).join('')}`;
 		}
+		throw `Can't convert array to semicode: block ${index+1} has unsupported type '${typeof block}'`;
 	}).join('');
 }
 
@@ -89,8 +96,8 @@ function isWordSeparator(char) {
 }
 
 export function* arrayToLines(array) {
-	for (let i=0, lineStart=0, lineIndex=0; i<=array.length; i++) {
-		if (i === array.length || array[i] === '\n') {
+	for (let i=0, lineStart=0; i<=array.length; i++) {
+		if (array[i] === '\n' || i === array.length) {
 			yield {start: lineStart, end: i};
 			lineStart = i+1;
 		}
@@ -99,7 +106,10 @@ export function* arrayToLines(array) {
 
 export function* arrayToWords(array) {
 	for (let i=0, wordStart=0; i<=array.length; i++) {
-		if (i === array.length || isWordSeparator(array[i])) {
+		if (i < array.length && Array.isArray(array[i])) {
+			yield* arrayToWords(array[i]);
+			wordStart = i+1;
+		} else if (i === array.length || isWordSeparator(array[i])) {
 			if (wordStart < i) {
 				if ((i - wordStart) === 1) {
 					yield array[wordStart];

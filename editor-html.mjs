@@ -1,14 +1,32 @@
 import * as sc from './semicode.mjs';
 import * as ec from './editor-core.mjs';
 
-const spans = [];
-const divs = [];
 const caretEl = document.getElementById('caret');
-const spanToBlockMap = new Map();
+let selectedSpans = [];
+
+const spanToBlockMap = new Map([[document.body, ec.blocks]]);
+const arrayToSpanMap = new Map([[ec.blocks, document.body]]);
 
 const colors = ['yellow','orange','red','magenta','violet','blue','cyan','green'];
 
-function makeSpanForBlock(block) {
+function getSpanForBlock(block) {
+	if (Array.isArray(block)) {
+		if (arrayToSpanMap.has(block)) {
+			return arrayToSpanMap.get(block);
+		}
+		const span = document.createElement('span');
+		const childSpans = block.map(getSpanForBlock);
+		const childDivs = [...sc.arrayToLines(block)].map(line => {
+			const div = document.createElement('div');
+			div.append(...childSpans.slice(line.start, line.end+1));
+			return div;
+		});
+		span.append(...childDivs);
+		span.classList.add('nested');
+		arrayToSpanMap.set(block, span);
+		spanToBlockMap.set(span, block);
+		return span;
+	}
 	const span = document.createElement('span');
 	if (block === '\n') {
 		span.classList.add('newline');
@@ -36,72 +54,67 @@ function makeSpanForBlock(block) {
 			span.innerHTML = '&nbsp;&nbsp;';
 		}
 		span.classList.add('bytes');
-	} else if (Array.isArray(block)) {
-		for (const line of sc.arrayToLines(block)) {
-			const div = document.createElement('div');
-			div.append(...block.slice(line.start, line.end+1).map(makeSpanForBlock));
-			span.append(div);
-		}
-		span.classList.add('nested');
 	}
 	spanToBlockMap.set(span, block);
 	return span;
 }
 
-ec.onsplice((start, length, added, removed) => {
+ec.onsplice((context, start, length, added, removed) => {
 	pauseCaretBlink();
-	const newSpans = added.map(makeSpanForBlock);
-	const removedSpans = spans.splice(start, length, ...newSpans);
+	const contextSpan = arrayToSpanMap.get(context);
+	const spans = [...contextSpan.querySelectorAll(':scope > div > span')];
+	const divs = [...contextSpan.querySelectorAll(':scope > div')];
+	const addedSpans = added.map(getSpanForBlock);
+	const removedSpans = spans.splice(start, length, ...addedSpans);
 	for (const removedSpan of removedSpans) {
-		removedSpan.remove();
-		spanToBlockMap.delete(removedSpan);
+		if (removedSpan?.parentElement?.parentElement === contextSpan) {
+			removedSpan.remove();
+		}
 	}
 
-	const lines = [...sc.arrayToLines(ec.blocks)];
+	const lines = [...sc.arrayToLines(context)];
 	if (divs.length < lines.length) {
 		divs.push(...Array.from(Array(lines.length-divs.length), () => document.createElement('div')));
 	} else if (divs.length > lines.length) {
 		divs.splice(lines.length-divs.length).forEach(div => div.remove());
 	}
-	document.body.append(...divs);
+	contextSpan.append(...divs);
 	for (const [index, line] of lines.entries()) {
 		divs[index].append(...spans.slice(line.start, line.end+1));
 	}
 
-	setCaretElPosition(ec.caretPosition);
+	setCaretElPosition(context, ec.caretPosition);
 	caretEl.scrollIntoView({block: 'nearest', inline: 'nearest'});
 
+	selectedSpans.forEach(span => span.classList.remove('selected'));
+
 	updateLabels();
+	applyRowColumnRules(context);
 });
 
-ec.onembedsplice(position => {
-	const block = ec.blocks[position];
-	const span = spans[position];
-	span.innerHTML = '';
-	for (const line of sc.arrayToLines(block)) {
-		const div = document.createElement('div');
-		div.append(...block.slice(line.start, line.end+1).map(makeSpanForBlock));
-		span.append(div);
-	}
-	updateLabels();
-});
-
-ec.oncaretmove((caretPosition, selectPosition) => {
+ec.oncaretmove((context, caretPosition, selectPosition) => {
 	pauseCaretBlink();
-	setCaretElPosition(ec.caretPosition);
+	setCaretElPosition(context, ec.caretPosition);
 	caretEl.scrollIntoView({block: 'nearest', inline: 'nearest'});
+
+	selectedSpans.forEach(span => span.classList.remove('selected'));
 
 	const indexMin = Math.min(caretPosition, selectPosition);
 	const indexMax = Math.max(caretPosition, selectPosition);
-	spans.forEach((span, index) => span.classList.toggle('selected', index >= indexMin && index < indexMax));
+	const contextSpan = arrayToSpanMap.get(context);
+	selectedSpans = [...contextSpan.querySelectorAll(':scope > div > span')].filter((span, index) => index >= indexMin && index < indexMax);
+	selectedSpans.forEach(span => span.classList.add('selected'));
 });
 
-function setCaretElPosition(position) {
+function setCaretElPosition(context, position) {
+	const contextSpan = arrayToSpanMap.get(context);
+	const spans = [...contextSpan.querySelectorAll(':scope > div > span')];
 	if (spans.length === 0) {
-		document.body.prepend(caretEl);
+		contextSpan.querySelector('div').prepend(caretEl);
 	} else if (position < spans.length) {
 		spans[position].before(caretEl);
 	} else {
+		const divs = [...contextSpan.querySelectorAll(':scope > div')];
 		divs[divs.length-1].append(caretEl);
 	}
 }
@@ -139,50 +152,63 @@ function updateLabels() {
 			}
 		}
 	}
+}
+
+function applyRowColumnRules(array) {
+	const contextSpan = arrayToSpanMap.get(array);
+	const spans = [...contextSpan.querySelectorAll(':scope > div > span')];
 	let growRow = false;
 	let growColumn = false;
-	for (let i=0; i<ec.blocks.length; i++) {
-		switch (ec.blocks[i]) {
+	for (let i=0; i<array.length; i++) {
+		switch (array[i]) {
 			case ec.GROW_ROW:    growRow    = true;  continue;
 			case ec.SHRINK_ROW:  growRow    = false; continue;
 			case ec.GROW_COLUMN: growColumn = true;  continue;
 		}
 		spans[i].classList.toggle('grow-row', growRow);
 		spans[i].parentElement.classList.toggle('grow-column', growColumn);
+		if (Array.isArray(array[i])) {
+			applyRowColumnRules(array[i]);
+		}
 	}
 }
 
 function getCaretPositionForPointerEvent(event) {
-	let span = event.target.closest('span');
-	if (!span) {
-		const div = event.target.closest('div');
-		if (div) {
-			span = div.children[div.children.length-1];
-		}
+	let span = null;
+	if (event.target.tagName === 'SPAN') {
+		span = event.target;
+	} else if (event.target.tagName === 'DIV') {
+		span = [...event.target.querySelectorAll(':scope > span')].at(-1);
 	}
 	if (!span) {
-		return null;
+		return [null, null];
 	}
-	const index = spans.indexOf(span);
+	const contextSpan = span.parentElement.parentElement;
+	const siblingSpans = [...contextSpan.querySelectorAll(':scope > div > span')];
+	const index = siblingSpans.indexOf(span);
 	if (index === -1) {
-		return null;
+		return [null, null];
 	}
-	return index;
+	const contextPath = [];
+	for (let parentSpan = contextSpan; !!parentSpan; parentSpan = parentSpan?.parentElement?.parentElement) {
+		contextPath.unshift(spanToBlockMap.get(parentSpan));
+	}
+	return [contextPath, index];
 }
 
 document.body.onpointerdown = downEvent => {
 	if (document.body.onpointermove !== null) {
 		return;
 	}
-	const position = getCaretPositionForPointerEvent(downEvent);
+	const [contextPath, position] = getCaretPositionForPointerEvent(downEvent);
 	if (position !== null) {
-		ec.moveCaret(position);
+		ec.moveCaret(position, 'clear-selection', contextPath);
 	}
 	// document.body.setPointerCapture(downEvent.pointerId);
 	document.body.onpointermove = moveEvent => {
-		const position = getCaretPositionForPointerEvent(moveEvent);
-		if (position !== null) {
-			ec.moveCaret(position, true);
+		const [newContextPath, position] = getCaretPositionForPointerEvent(moveEvent);
+		if (position !== null && newContextPath.at(-1) === contextPath.at(-1)) {
+			ec.moveCaret(position, 'keep-selection', contextPath);
 		}
 	}
 	document.body.onpointerup = document.body.onpointercancel = upEvent => {
@@ -193,8 +219,8 @@ document.body.onpointerdown = downEvent => {
 }
 
 document.body.ondblclick = event => {
-	const position = getCaretPositionForPointerEvent(event);
+	const [contextPath, position] = getCaretPositionForPointerEvent(event);
 	if (position !== null) {
-		ec.selectWordAtPosition(position);
+		ec.selectWordAtPosition(position, contextPath);
 	}
 }
