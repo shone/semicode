@@ -175,19 +175,23 @@ function applyRowColumnRules(array) {
 
 function getCaretPositionForPointerEvent(event) {
 	let span = null;
-	if (event.target.tagName === 'SPAN') {
-		span = event.target;
-	} else if (event.target.tagName === 'DIV') {
-		span = [...event.target.querySelectorAll(':scope > span')].at(-1);
+	switch (event.target.tagName) {
+		case 'SPAN': span = event.target; break;
+		case 'DIV':  span = event.target.querySelector(':scope > span:last-of-type'); break;
+		default: return [null, null];
 	}
 	if (!span) {
 		return [null, null];
 	}
 	const contextSpan = span.parentElement.parentElement;
 	const siblingSpans = [...contextSpan.querySelectorAll(':scope > div > span')];
-	const index = siblingSpans.indexOf(span);
+	let index = siblingSpans.indexOf(span);
 	if (index === -1) {
 		return [null, null];
+	}
+	const boundingRect = span.getBoundingClientRect();
+	if (event.target.tagName === 'SPAN' && event.clientX > boundingRect.left + (boundingRect.width/2)) {
+		index++;
 	}
 	const contextPath = [];
 	for (let parentSpan = contextSpan; !!parentSpan; parentSpan = parentSpan?.parentElement?.parentElement) {
